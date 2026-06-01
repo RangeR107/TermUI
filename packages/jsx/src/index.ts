@@ -23,6 +23,7 @@ export {
     useKeymap,
     useMotion,
     useInsertBefore,
+    useReducer,
 } from './hooks.js';
 export type { AsyncState, KeyBinding, MotionPreferences } from './hooks.js';
 
