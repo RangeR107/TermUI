@@ -65,6 +65,28 @@ describe("CLI args", () => {
         expect(res.dryRun).toBe(false);
     });
 
+    it("does not treat a --dir value as the component name", () => {
+        const res = parseArgs(["add", "--dir", "Badge"]);
+
+        expect(res.command).toBe("add");
+        expect(res.component).toBeUndefined();
+        expect(res.dir).toBe("Badge");
+    });
+
+    it("parses a component that follows the --dir value", () => {
+        const res = parseArgs(["add", "--dir", "src/ui", "Badge"]);
+
+        expect(res.command).toBe("add");
+        expect(res.component).toBe("Badge");
+        expect(res.dir).toBe("src/ui");
+    });
+
+    it("accepts the form-wizard scaffold template", () => {
+        const res = parseArgs(["my-app", "--template", "form-wizard"]);
+
+        expect(res.template).toBe("form-wizard");
+    });
+
     it("parses add command directory and --yes flag", () => {
         const res = parseArgs([
             "add",

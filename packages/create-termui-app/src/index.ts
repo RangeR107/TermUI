@@ -9,6 +9,7 @@ import { textPrompt, selectPrompt, multiSelectPrompt } from './prompts.js';
 import { generateProject, type ProjectConfig } from './templates.js';
 import { parseArgs, type CliArgs } from './args.js';
 import { runAddCommand } from './commands/add.js';
+import { validateProjectName, validateResolvedPath } from "./validate.js";
 
 const TEMPLATES = [
   'Empty (start from scratch)',
@@ -18,6 +19,7 @@ const TEMPLATES = [
   'CLI Tool (minimal: box + text + useKeymap)',
   'File Manager',
   'AI Assistant (Claude + mock mode)',
+  'Form Wizard',
 ];
 
 const TEMPLATE_KEYS = [
@@ -28,6 +30,7 @@ const TEMPLATE_KEYS = [
   'cli-tool',
   'file-manager',
   'ai-assistant',
+  'form-wizard',
 ] as const;
 const FEATURES = ['Screen Router', 'Data Providers', 'Hot Reload'];
 
@@ -56,10 +59,12 @@ async function runProjectScaffold(args: CliArgs): Promise<void> {
   console.log();
 
   // ── Get project name from args or prompt ──
-  let projectName = args.name ?? process.argv[2];
+  let projectName = args.name;
   if (!projectName) {
     projectName = await textPrompt('Project name', 'my-termui-app');
   }
+  projectName = validateProjectName(projectName);
+  validateResolvedPath(process.cwd(), projectName);
 
   // ── Template selection ──
   const templateIdx = args.template

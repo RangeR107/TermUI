@@ -17,6 +17,7 @@ const TEMPLATE_KEYS = [
     "cli-wrapper",
     "cli-tool",
     "file-manager",
+    "form-wizard",
 ] as const;
 
 function getValue(
@@ -43,9 +44,23 @@ export function parseArgs(argv: string[]): CliArgs {
     };
 
     if (argv[0] === "add") {
-        const positional = argv.filter(a => !a.startsWith("-"));
-        args.command = positional[0];
-        args.component = positional[1];
+        const positional: string[] = [];
+
+        for (let index = 1; index < argv.length; index++) {
+            const value = argv[index];
+
+            if (value === "--dir") {
+                index++;
+                continue;
+            }
+
+            if (!value.startsWith("-")) {
+                positional.push(value);
+            }
+        }
+
+        args.command = "add";
+        args.component = positional[0];
         args.dryRun = argv.includes("--dry-run");
         args.yes = argv.includes("--yes");
 

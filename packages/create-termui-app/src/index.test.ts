@@ -54,4 +54,18 @@ describe('CLI integration', () => {
     expect(readFileSync(join(tempDir, 'my-app', 'package.json'), 'utf-8')).toBe('{ }');
     expect(addSpy).not.toHaveBeenCalled();
   });
+
+  it('rejects an unsafe project name before generating or writing files', async () => {
+    const generateSpy = vi.spyOn(templates, 'generateProject');
+    const indexModule = await import('./index');
+    const unsafeName = `unsafe-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const unsafePath = join(tempDir, '..', unsafeName);
+
+    await expect(indexModule.runCli([`../${unsafeName}`])).rejects.toThrow(
+      'Project name cannot contain path separators or traversal sequences',
+    );
+
+    expect(generateSpy).not.toHaveBeenCalled();
+    expect(existsSync(unsafePath)).toBe(false);
+  });
 });
