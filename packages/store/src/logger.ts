@@ -3,9 +3,8 @@
 //
 // Provides two exports:
 //
-//   logger        — drop-in middleware constant; logs prev/next state
-//                   to the console. Intended for devtools use only —
-//                   do not enable in production terminal apps.
+//   logger        — drop-in middleware constant; logs state transitions
+//                   to the default file sink (no console.log).
 //
 //   createLogger  — factory for a configurable logger: custom output
 //                   sink, optional per-key diff, optional store label.
@@ -15,8 +14,7 @@
 //   const useStore = createStore(creator, { middleware: [logger] });
 //
 // Usage (configurable):
-//   import { createStore } from '@termuijs/store';
-//   import { createLogger } from '@termuijs/store';
+//   import { createStore, createLogger } from '@termuijs/store';
 //   const useStore = createStore(creator, {
 //       middleware: [createLogger({ name: 'counter', diff: true })],
 //   });
@@ -33,7 +31,7 @@ export interface LoggerOptions {
     /**
      * Custom output sink — receives one formatted line at a time.
      * Defaults to appending to `<tmpdir>/termuijs-store.log`.
-     * Pass `output: (msg) => console.log(msg)` to redirect to the console.
+     * Example: `output: (msg) => process.stderr.write(msg + '\n')`
      */
     output?: (message: string) => void;
 
@@ -50,28 +48,7 @@ export interface LoggerOptions {
     name?: string;
 }
 
-// ── Simple logger constant ─────────────────────────────
-
-/**
- * Drop-in logger middleware. Logs the previous and next state to the
- * console on every `setState` call. Intended for devtools / debugging
- * only — remove from production builds.
- *
- * ```typescript
- * const useStore = createStore(creator, { middleware: [logger] });
- * ```
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const logger: Middleware<any> = (prevState, update, next): void => {
-    // console.log is intentional here — this is a devtools-only middleware
-    // eslint-disable-next-line no-console
-    console.log('Previous State:', prevState);
-    const nextState = next(update);
-    // eslint-disable-next-line no-console
-    console.log('Next State:', nextState);
-};
-
-// ── Default output sink for createLogger ──────────────
+// ── Default output sink ────────────────────────────────
 
 function defaultOutput(message: string): void {
     const logFile = path.join(os.tmpdir(), 'termuijs-store.log');
@@ -114,16 +91,20 @@ export function createLogger<T extends object>(options?: LoggerOptions): Middlew
         write(`${prefix}${ts} next   ${JSON.stringify(nextState)}`);
 
         if (showDiff) {
+            // Cast narrows Object.keys(string[]) to actual keys of T for safe indexed access
             const changedKeys = (Object.keys(update) as (keyof T)[]).filter(
+                // nextState is the value returned by next(update) in this chain — safe to treat as T
                 (k) => !Object.is(prevState[k], (nextState as T)[k]),
             );
 
             if (changedKeys.length > 0) {
+                // any required: state values are heterogeneous and cannot be statically narrowed
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const diffObj: Record<string, { from: any; to: any }> = {};
                 for (const k of changedKeys) {
                     diffObj[k as string] = {
                         from: prevState[k],
+                        // nextState asserted as T to allow indexing with keyof T safely
                         to:   (nextState as T)[k],
                     };
                 }
@@ -132,3 +113,18 @@ export function createLogger<T extends object>(options?: LoggerOptions): Middlew
         }
     };
 }
+
+// ── Simple logger constant ─────────────────────────────
+
+/**
+ * Drop-in logger middleware. Logs the previous and next state on every
+ * `setState` call using the default file sink (`<tmpdir>/termuijs-store.log`).
+ * Pass a custom `output` via `createLogger` to redirect to a different sink.
+ *
+ * ```typescript
+ * const useStore = createStore(creator, { middleware: [logger] });
+ * ```
+ */
+// any required: logger must accept arbitrary store shapes across all generic consumers
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const logger: Middleware<any> = createLogger();

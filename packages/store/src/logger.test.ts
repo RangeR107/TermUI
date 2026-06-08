@@ -10,7 +10,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-// ── Slice type helpers ─────────────────────────────────
+// ── Type helpers ───────────────────────────────────────
 
 type CounterState = {
     count: number;
