@@ -10,48 +10,62 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-// ── Helpers ────────────────────────────────────────────
+// ── Slice type helpers ─────────────────────────────────
 
-function makeCounter() {
-    return createStore(
-        (set) => ({
-            count: 0,
-            name:  'counter',
-            inc:   () => set((s) => ({ count: s.count + 1 })),
-            reset: () => set({ count: 0 }),
-        }),
-    );
-}
+type CounterState = {
+    count: number;
+    inc: () => void;
+};
+
+type LabelState = {
+    count: number;
+    label: string;
+    setLabel: (l: string) => void;
+};
+
+type ValueState = {
+    value: number;
+};
+
+type XState = {
+    x: number;
+    set: (v: number) => void;
+};
+
+type NState = {
+    n: number;
+    inc: () => void;
+};
 
 // ── Tests ──────────────────────────────────────────────
 
 describe('createLogger', () => {
     it('calls output with prev and next state lines on setState', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<CounterState>(
             (set) => ({ count: 0, inc: () => set((s) => ({ count: s.count + 1 })) }),
             { middleware: [createLogger({ output })] },
         );
 
         useStore.getState().inc();
 
-        // At least a "prev" and "next" line
-        expect(output).toHaveBeenCalledTimes(3); // prev + next + diff
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
+        // prev + next + diff lines
+        expect(output).toHaveBeenCalledTimes(3);
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         expect(lines.some((l) => l.includes('prev'))).toBe(true);
         expect(lines.some((l) => l.includes('next'))).toBe(true);
     });
 
     it('prev line contains the old state and next line contains the new state', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<CounterState>(
             (set) => ({ count: 0, inc: () => set((s) => ({ count: s.count + 1 })) }),
             { middleware: [createLogger({ output })] },
         );
 
         useStore.getState().inc();
 
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         const prevLine = lines.find((l) => l.includes('prev'))!;
         const nextLine = lines.find((l) => l.includes('next'))!;
 
@@ -61,14 +75,14 @@ describe('createLogger', () => {
 
     it('emits a diff line with from/to for changed keys', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<CounterState>(
             (set) => ({ count: 0, inc: () => set((s) => ({ count: s.count + 1 })) }),
             { middleware: [createLogger({ output, diff: true })] },
         );
 
         useStore.getState().inc();
 
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         const diffLine = lines.find((l) => l.includes('diff'));
         expect(diffLine).toBeDefined();
         expect(diffLine).toContain('"from":0');
@@ -77,69 +91,66 @@ describe('createLogger', () => {
 
     it('suppresses diff line when diff: false', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<CounterState>(
             (set) => ({ count: 0, inc: () => set((s) => ({ count: s.count + 1 })) }),
             { middleware: [createLogger({ output, diff: false })] },
         );
 
         useStore.getState().inc();
 
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         expect(lines.some((l) => l.includes('diff'))).toBe(false);
-        // Still emits prev + next
+        // Still emits prev + next only
         expect(output).toHaveBeenCalledTimes(2);
     });
 
     it('prepends the name label when name option is provided', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<XState>(
             (set) => ({ x: 0, set: (v: number) => set({ x: v }) }),
             { middleware: [createLogger({ output, name: 'myStore' })] },
         );
 
         useStore.getState().set(5);
 
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         expect(lines.every((l) => l.startsWith('[myStore]'))).toBe(true);
     });
 
     it('emits no label when name is omitted', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<XState>(
             (set) => ({ x: 0, set: (v: number) => set({ x: v }) }),
             { middleware: [createLogger({ output })] },
         );
 
         useStore.getState().set(3);
 
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         expect(lines.every((l) => !l.startsWith('['))).toBe(true);
     });
 
     it('does not throw when update is an empty partial', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<ValueState>(
             () => ({ value: 42 }),
             { middleware: [createLogger({ output })] },
         );
 
-        // setState with no actual changes — still should not throw
         expect(() => useStore.setState({})).not.toThrow();
     });
 
     it('diff is not emitted when no values actually changed (Object.is bail-out)', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<ValueState>(
             () => ({ value: 42 }),
             { middleware: [createLogger({ output, diff: true })] },
         );
 
-        // Same value — store's Object.is bail-out means setState won't notify,
-        // but the middleware still runs. Diff section should be empty.
+        // Same value — Object.is means no key in the diff changed
         useStore.setState({ value: 42 });
 
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
-        // No diff line because no keys changed
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         expect(lines.some((l) => l.includes('diff'))).toBe(false);
     });
 
@@ -147,7 +158,7 @@ describe('createLogger', () => {
         const outputA = vi.fn();
         const outputB = vi.fn();
 
-        const useStore = createStore(
+        const useStore = createStore<NState>(
             (set) => ({ n: 0, inc: () => set((s) => ({ n: s.n + 1 })) }),
             {
                 middleware: [
@@ -165,14 +176,14 @@ describe('createLogger', () => {
 
     it('each log line contains an ISO timestamp', () => {
         const output = vi.fn();
-        const useStore = createStore(
+        const useStore = createStore<XState>(
             (set) => ({ x: 0, set: (v: number) => set({ x: v }) }),
             { middleware: [createLogger({ output })] },
         );
 
         useStore.getState().set(7);
 
-        const lines: string[] = output.mock.calls.map((c) => c[0]);
+        const lines: string[] = output.mock.calls.map((c) => c[0] as string);
         const isoPattern = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
         expect(lines.every((l) => isoPattern.test(l))).toBe(true);
     });

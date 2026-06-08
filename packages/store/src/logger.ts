@@ -1,13 +1,22 @@
 // ─────────────────────────────────────────────────────
 // @termuijs/store — Devtools Logger Middleware
 //
-// A pluggable action logger that records state transitions
-// and key-level diffs to a configurable output sink.
+// Provides two exports:
 //
-// Usage:
+//   logger        — drop-in middleware constant; logs prev/next state
+//                   to the console. Intended for devtools use only —
+//                   do not enable in production terminal apps.
+//
+//   createLogger  — factory for a configurable logger: custom output
+//                   sink, optional per-key diff, optional store label.
+//
+// Usage (simple):
+//   import { createStore, logger } from '@termuijs/store';
+//   const useStore = createStore(creator, { middleware: [logger] });
+//
+// Usage (configurable):
 //   import { createStore } from '@termuijs/store';
 //   import { createLogger } from '@termuijs/store';
-//
 //   const useStore = createStore(creator, {
 //       middleware: [createLogger({ name: 'counter', diff: true })],
 //   });
@@ -23,8 +32,8 @@ import type { Middleware } from './store.js';
 export interface LoggerOptions {
     /**
      * Custom output sink — receives one formatted line at a time.
-     * Defaults to appending to `<tmpdir>/termuijs-store.log` so
-     * the terminal display is never polluted (no console.log in UI code).
+     * Defaults to appending to `<tmpdir>/termuijs-store.log`.
+     * Pass `output: (msg) => console.log(msg)` to redirect to the console.
      */
     output?: (message: string) => void;
 
@@ -41,7 +50,28 @@ export interface LoggerOptions {
     name?: string;
 }
 
-// ── Default output sink ────────────────────────────────
+// ── Simple logger constant ─────────────────────────────
+
+/**
+ * Drop-in logger middleware. Logs the previous and next state to the
+ * console on every `setState` call. Intended for devtools / debugging
+ * only — remove from production builds.
+ *
+ * ```typescript
+ * const useStore = createStore(creator, { middleware: [logger] });
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const logger: Middleware<any> = (prevState, update, next): void => {
+    // console.log is intentional here — this is a devtools-only middleware
+    // eslint-disable-next-line no-console
+    console.log('Previous State:', prevState);
+    const nextState = next(update);
+    // eslint-disable-next-line no-console
+    console.log('Next State:', nextState);
+};
+
+// ── Default output sink for createLogger ──────────────
 
 function defaultOutput(message: string): void {
     const logFile = path.join(os.tmpdir(), 'termuijs-store.log');
@@ -52,10 +82,11 @@ function defaultOutput(message: string): void {
     }
 }
 
-// ── Factory ────────────────────────────────────────────
+// ── Configurable logger factory ────────────────────────
 
 /**
- * createLogger — produce a store middleware that logs state transitions.
+ * createLogger — produce a store middleware that logs state transitions
+ * to a configurable output sink.
  *
  * ```typescript
  * const useStore = createStore(creator, {
@@ -65,17 +96,15 @@ function defaultOutput(message: string): void {
  * });
  * ```
  *
- * Every `setState` call emits three lines (when diff is enabled):
- *   `[label] <iso-timestamp> action  prev: {...}`
- *   `[label] <iso-timestamp> action  next: {...}`
- *   `[label] <iso-timestamp> diff    { key: { from: <old>, to: <new> } }`
- *
- * With `diff: false` only the prev/next lines are emitted.
+ * Every `setState` call emits two or three lines:
+ *   `[label] <iso-timestamp> prev   {...}`
+ *   `[label] <iso-timestamp> next   {...}`
+ *   `[label] <iso-timestamp> diff   { key: { from: <old>, to: <new> } }`  ← when diff: true
  */
 export function createLogger<T extends object>(options?: LoggerOptions): Middleware<T> {
-    const write   = options?.output ?? defaultOutput;
+    const write    = options?.output ?? defaultOutput;
     const showDiff = options?.diff ?? true;
-    const prefix  = options?.name ? `[${options.name}] ` : '';
+    const prefix   = options?.name ? `[${options.name}] ` : '';
 
     return (prevState, update, next): void => {
         const nextState = next(update);
