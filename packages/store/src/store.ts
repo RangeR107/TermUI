@@ -132,6 +132,8 @@ export interface Computed<U> {
     get(): U;
     /** Subscribe to changes — listener fires only when the derived value changes */
     subscribe(listener: (value: U) => void): () => void;
+    /** Remove the internal store subscription and clear all computed listeners — call when done to prevent memory leaks */
+    dispose(): void;
 }
 
 export interface Store<T> {
@@ -373,7 +375,7 @@ export function createStore<T extends object>(
 
         // Piggyback on the store's own subscribe — recompute on every state change
         // but only notify computed subscribers when the derived value actually changes
-        subscribe((newState) => {
+        const storeUnsub = subscribe((newState) => {
             const newValue = selector(newState);
             if (!Object.is(cachedValue, newValue)) {
                 cachedValue = newValue;
@@ -388,6 +390,10 @@ export function createStore<T extends object>(
             subscribe: (listener) => {
                 computedListeners.add(listener);
                 return () => { computedListeners.delete(listener); };
+            },
+            dispose: () => {
+                storeUnsub();
+                computedListeners.clear();
             },
         };
     };
@@ -422,6 +428,7 @@ export function createStore<T extends object>(
     (useStore as any).subscribe = subscribe;
     (useStore as any).destroy = destroy;
     (useStore as any).computed = computed;
+    // dispose is exposed on each Computed<U> instance returned by computed() — no hook-level attach needed
     (useStore as any).reset = reset;
     (useStore as any).getInitialState = getInitialState;
 
